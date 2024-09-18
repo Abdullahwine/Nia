@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Niaa' Assistant</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #e0e0e0;
+        }
+        #container {
+            position: relative;
+            width: 80vw;
+            height: 80vh;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            overflow: hidden;
+            background-color: #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: width 0.3s, height 0.3s;
+        }
+        #camera {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: opacity 0.3s;
+        }
+        .control-btn {
+            padding: 12px 3px;
+            border: none;
+            border-radius: 5px;
+            background: linear-gradient(to right, #00BFFF, #ADD8E6);
+            color: #000;
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s, box-shadow 0.3s;
+        }
+        .control-btn:hover {
+            background-color: #0056b3;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        #transparency {
+            width: 260px;
+            margin-left: 0;
+        }
+        .transparent {
+            opacity: 0.5;
+        }
+        #title {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 19px;
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            color: #000000;
+            background: linear-gradient(to right, #d4af37, #ffd700, #b8860b);
+            padding: 10px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: opacity 0.3s;
+            z-index: 1;
+        }
+        #timer-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            display: none;
+        }
+        #timer {
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            padding: 5px 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .timer-btn {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 3px;
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background-color 0.3s, box-shadow 0.3s;
+        }
+        .timer-btn:hover {
+            background-color: rgba(0, 0, 0, 0.7);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="title">N'iaa Assistant</div>
+        <video id="camera" autoplay></video>
+        <img id="image" src="" style="display: none;">
+        <div id="controls">
+            <input type="file" id="fileInput" class="control-btn" title="رفع صورة">
+            <input type="range" id="transparency" class="control-btn" min="0" max="100" value="50" title="تعديل الشفافية">
+            <button id="resize" class="control-btn" title="تغيير حجم الرسم">تغيير حجم الرسم</button>
+        </div>
+        <div id="timer-container">
+            <div id="timer">00:00:00</div>
+            <button id="startTimer" class="timer-btn">بدء</button>
+            <button id="pauseTimer" class="timer-btn">توقف مؤقت</button>
+            <button id="resumeTimer" class="timer-btn" style="display: none;">استئناف</button>
+            <button id="stopTimer" class="timer-btn">إيقاف</button>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('camera');
+        const image = document.getElementById('image');
+        const fileInput = document.getElementById('fileInput');
+        const transparency = document.getElementById('transparency');
+        const resizeButton = document.getElementById('resize');
+        const container = document.getElementById('container');
+        const controls = document.getElementById('controls');
+        const title = document.getElementById('title');
+        const timerDisplay = document.getElementById('timer');
+        const startButton = document.getElementById('startTimer');
+        const pauseButton = document.getElementById('pauseTimer');
+        const resumeButton = document.getElementById('resumeTimer');
+        const stopButton = document.getElementById('stopTimer');
+        const timerContainer = document.getElementById('timer-container');
+
+        let timerInterval;
+        let timerStart = 0; // Time in seconds
+        let timerRunning = false;
+        let timerPaused = false;
+
+        // إعداد الكاميرا
+        navigator.mediaDevices.enumerateDevices()
+            .then(devices => {
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                const backCamera = videoDevices.find(device => !device.label.toLowerCase().includes('front'));
+
+                if (backCamera) {
+                    return navigator.mediaDevices.getUserMedia({ video: { deviceId: backCamera.deviceId } });
+                } else {
+                    return navigator.mediaDevices.getUserMedia({ video: true });
+                }
+            })
+            .then(stream => {
+                video.srcObject = stream;
+                video.play(); // تأكد من تشغيل الفيديو
+            })
+            .catch(err => {
+                console.error('حدث خطأ في الوصول إلى الكاميرا:', err);
+                alert('حدث خطأ في الوصول إلى الكاميرا. تحقق من الأذونات وحاول مرة أخرى.');
+            });
+
+        // تحميل الصورة وتغيير شفافيتها
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    image.src = e.target.result;
+                    image.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        transparency.addEventListener('input', (event) => {
+            const value = event.target.value;
+            image.style.opacity = value / 100;
+        });
+
+        // تغيير حجم مربع الرسم
+        resizeButton.addEventListener('click', () => {
+            if (container.style.width === '80vw') {
+                container.style.width = '100vw';
+                container.style.height = '100vh';
+                controls.classList.add('transparent');
+                title.style.opacity = '0'; // إخفاء العنوان
+                fileInput.style.display = 'none'; // إخفاء خانة رفع الصورة عند تكبير الرسم
+                timerContainer.style.display = 'flex'; // إظهار المؤقت عند تكبير الرسم
+            } else {
+                container.style.width = '80vw';
+                container.style.height = '80vh';
+                controls.classList.remove('transparent');
+                title.style.opacity = '1'; // إظهار العنوان
+                fileInput.style.display = 'block'; // إظهار خانة رفع الصورة عند تصغير الرسم
+                timerContainer.style.display = 'none'; // إخفاء المؤقت عند تصغير الرسم
+            }
+        });
+
+        // تحديث المؤقت
+        function updateTimer() {
+            const hours = Math.floor(timerStart / 3600);
+            const minutes = Math.floor((timerStart % 3600) / 60);
+            const seconds = timerStart % 60;
+            timerDisplay.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function startTimer() {
+            if (timerRunning) return; // إذا كان المؤقت قيد التشغيل بالفعل
+            timerRunning = true;
+            timerPaused = false;
+            timerInterval = setInterval(() => {
+                timerStart++;
+                updateTimer();
+            }, 1000);
+        }
+
+        function pauseTimer() {
+            if (!timerRunning || timerPaused) return;
+            timerPaused = true;
+            clearInterval(timerInterval);
+            resumeButton.style.display = 'block'; // إظهار زر الاستئناف
+        }
+
+        function resumeTimer() {
+            if (!timerRunning || !timerPaused) return;
+            timerPaused = false;
+            timerInterval = setInterval(() => {
+                timerStart++;
+                updateTimer();
+            }, 1000);
+            resumeButton.style.display = 'none'; // إخفاء زر الاستئناف
+        }
+
+        function stopTimer() {
+            if (!timerRunning) return;
+            clearInterval(timerInterval);
+            timerRunning = false;
+            timerPaused = false;
+            timerStart = 0;
+            updateTimer();
+            resumeButton.style.display = 'none'; // إخفاء زر الاستئناف عند إيقاف المؤقت
+        }
+
+        // بدء المؤقت عند الضغط على زر "بدء"
+        startButton.addEventListener('click', startTimer);
+
+        // إيقاف المؤقت عند الضغط على زر "توقف مؤقت"
+        pauseButton.addEventListener('click', pauseTimer);
+
+        // استئناف المؤقت عند الضغط على زر "استئناف"
+        resumeButton.addEventListener('click', resumeTimer);
+
+        // إيقاف المؤقت عند الضغط على زر "إيقاف"
+        stopButton.addEventListener('click', stopTimer);
+    </script>
+</body>
+</html>
